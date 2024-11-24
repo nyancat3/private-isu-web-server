@@ -99,14 +99,13 @@ module Isuconp
       end
 
       def make_posts(results, all_comments: false)
-        # 'SELECT `posts`.`id`, `user_id`, `body`, `posts`.`created_at`, `mime` FROM `posts` JOIN `users` ON `posts`.`user_id` = `users`.`id` WHERE `users`.`del_flg` = 0 ORDER BY `created_at` DESC LIMIT 20'
         return [] unless results
 
         posts = []
         results.to_a.each do |post|
-          post[:comment_count] = db.prepare('SELECT COUNT(*) AS `count` FROM `comments` WHERE `post_id` = ?').execute(
-            post[:id]
-          ).first[:count]
+          # post[:comment_count] = db.prepare('SELECT COUNT(*) AS `count` FROM `comments` WHERE `post_id` = ?').execute(
+          #   post[:id]
+          # ).first[:count]
 
           query = 'SELECT * FROM `comments` WHERE `post_id` = ? ORDER BY `created_at` DESC'
           unless all_comments
@@ -228,7 +227,14 @@ module Isuconp
     get '/' do
       me = get_session_user()
 
-      results = db.query('SELECT `posts`.`id`, `user_id`, `body`, `posts`.`created_at`, `mime`, `account_name` FROM `posts` JOIN `users` ON `posts`.`user_id` = `users`.`id` WHERE `users`.`del_flg` = 0 ORDER BY `created_at` DESC LIMIT 20')
+      results = db.query(
+        'SELECT `posts`.`id`, `user_id`, `body`, `posts`.`created_at`, `mime`, `account_name`, `comment_count` ' \
+        'FROM `posts` ' \
+        'JOIN `users` ON `posts`.`user_id` = `users`.`id` ' \
+        'LEFT JOIN (SELECT `post_id`, COUNT(*) AS `comment_count` FROM `comments` GROUP BY `post_id`) AS `comment_counts` ' \
+        'WHERE `users`.`del_flg` = 0 ORDER BY `created_at` ' \
+        'DESC LIMIT 20'
+      )
       posts = make_posts(results)
 
       erb :index, layout: :layout, locals: { posts: posts, me: me }
@@ -243,9 +249,15 @@ module Isuconp
         return 404
       end
 
-      results = db.prepare('SELECT `posts`.`id`, `user_id`, `body`, `mime`, `posts`.`created_at`, `account_name` FROM `posts` JOIN `users` ON `posts`.`user_id` = `users`.`id` WHERE `user_id` = ? ORDER BY `created_at` DESC LIMIT 20').execute(
-        user[:id]
-      )
+      results = db.prepare(
+        'SELECT `posts`.`id`, `user_id`, `body`, `mime`, `posts`.`created_at`, `account_name`, `comment_count` ' \
+        'FROM `posts` ' \
+        'JOIN `users` ON `posts`.`user_id` = `users`.`id` ' \
+        'LEFT JOIN (SELECT `post_id`, COUNT(*) AS `comment_count` FROM `comments` GROUP BY `post_id`) AS `comment_counts` ' \
+        'WHERE `user_id` = ? ' \
+        'ORDER BY `created_at` DESC ' \
+        'LIMIT 20'
+      ).execute(user[:id])
       posts = make_posts(results)
 
       comment_count = db.prepare('SELECT COUNT(*) AS count FROM `comments` WHERE `user_id` = ?').execute(
@@ -272,7 +284,15 @@ module Isuconp
 
     get '/posts' do
       max_created_at = params['max_created_at']
-      results = db.prepare('SELECT `posts`.`id`, `user_id`, `body`, `mime`, `posts`.`created_at`, `account_name` FROM `posts` JOIN `users` ON `posts`.`user_id` = `users`.`id` WHERE `users`.`del_flg` = 0 AND `posts`.`created_at` <= ? ORDER BY `created_at` DESC LIMIT 20').execute(
+      results = db.prepare(
+        'SELECT `posts`.`id`, `user_id`, `body`, `mime`, `posts`.`created_at`, `account_name`, `comment_count` ' \
+        'FROM `posts` ' \
+        'JOIN `users` ON `posts`.`user_id` = `users`.`id` ' \
+        'LEFT JOIN (SELECT `post_id`, COUNT(*) AS `comment_count` FROM `comments` GROUP BY `post_id`) AS `comment_counts` ' \
+        'WHERE `users`.`del_flg` = 0 AND `posts`.`created_at` <= ? ' \
+        'ORDER BY `created_at` DESC ' \
+        'LIMIT 20'
+      ).execute(
         max_created_at.nil? ? nil : Time.iso8601(max_created_at).localtime
       )
       posts = make_posts(results)
@@ -281,7 +301,13 @@ module Isuconp
     end
 
     get '/posts/:id' do
-      results = db.prepare('SELECT `posts`.`id`, `user_id`, `mime`, `imgdata`, `body`, `posts`.`created_at`, `account_name` FROM `posts` JOIN `users` ON `posts`.`user_id` = `users`.`id` WHERE `users`.`del_flg` = 0 AND `posts`.`id` = ?').execute(
+      results = db.prepare(
+        'SELECT `posts`.`id`, `user_id`, `mime`, `imgdata`, `body`, `posts`.`created_at`, `account_name`, `comment_count` ' \
+        'FROM `posts` ' \
+        'JOIN `users` ON `posts`.`user_id` = `users`.`id` ' \
+        'LEFT JOIN (SELECT `post_id`, COUNT(*) AS `comment_count` FROM `comments` GROUP BY `post_id`) AS `comment_counts` ' \
+        'WHERE `users`.`del_flg` = 0 AND `posts`.`id` = ?'
+      ).execute(
         params[:id]
       )
       posts = make_posts(results, all_comments: true)
