@@ -1,5 +1,8 @@
 #!/usr/bin/env ruby
 
+# Enable YJIT
+ENV['RUBY_YJIT_ENABLE'] = '1'
+
 require 'mysql2'
 require 'digest'
 
