@@ -228,12 +228,14 @@ module Isuconp
       me = get_session_user()
 
       results = db.query(
-        'SELECT `posts`.`id`, `user_id`, `body`, `posts`.`created_at`, `mime`, `account_name`, `comment_count` ' \
+        'SELECT `posts`.`id`, `posts`.`user_id`, `posts`.`body`, `posts`.`created_at`, `posts`.`mime`, `users`.`account_name`, `comment_counts`.`comment_count` ' \
         'FROM `posts` ' \
         'JOIN `users` ON `posts`.`user_id` = `users`.`id` ' \
         'LEFT JOIN (SELECT `post_id`, COUNT(*) AS `comment_count` FROM `comments` GROUP BY `post_id`) AS `comment_counts` ' \
-        'WHERE `users`.`del_flg` = 0 ORDER BY `created_at` ' \
-        'DESC LIMIT 20'
+        'ON `posts`.`id` = `comment_counts`.`post_id` ' \
+        'WHERE `users`.`del_flg` = 0 ' \
+        'ORDER BY `posts`.`created_at` DESC ' \
+        'LIMIT 20'
       )
       posts = make_posts(results)
 
@@ -250,12 +252,13 @@ module Isuconp
       end
 
       results = db.prepare(
-        'SELECT `posts`.`id`, `user_id`, `body`, `mime`, `posts`.`created_at`, `account_name`, `comment_count` ' \
+        'SELECT `posts`.`id`, `posts`.`user_id`, `posts`.`body`, `posts`.`mime`, `posts`.`created_at`, `users`.`account_name`, `comment_counts`.`comment_count` ' \
         'FROM `posts` ' \
         'JOIN `users` ON `posts`.`user_id` = `users`.`id` ' \
         'LEFT JOIN (SELECT `post_id`, COUNT(*) AS `comment_count` FROM `comments` GROUP BY `post_id`) AS `comment_counts` ' \
-        'WHERE `user_id` = ? ' \
-        'ORDER BY `created_at` DESC ' \
+        'ON `posts`.`id` = `comment_counts`.`post_id` ' \
+        'WHERE `posts`.`user_id` = ? ' \
+        'ORDER BY `posts`.`created_at` DESC ' \
         'LIMIT 20'
       ).execute(user[:id])
       posts = make_posts(results)
@@ -285,12 +288,13 @@ module Isuconp
     get '/posts' do
       max_created_at = params['max_created_at']
       results = db.prepare(
-        'SELECT `posts`.`id`, `user_id`, `body`, `mime`, `posts`.`created_at`, `account_name`, `comment_count` ' \
+        'SELECT `posts`.`id`, `posts`.`user_id`, `posts`.`body`, `posts`.`mime`, `posts`.`created_at`, `users`.`account_name`, `comment_counts`.`comment_count` ' \
         'FROM `posts` ' \
         'JOIN `users` ON `posts`.`user_id` = `users`.`id` ' \
         'LEFT JOIN (SELECT `post_id`, COUNT(*) AS `comment_count` FROM `comments` GROUP BY `post_id`) AS `comment_counts` ' \
+        'ON `posts`.`id` = `comment_counts`.`post_id` ' \
         'WHERE `users`.`del_flg` = 0 AND `posts`.`created_at` <= ? ' \
-        'ORDER BY `created_at` DESC ' \
+        'ORDER BY `posts`.`created_at` DESC ' \
         'LIMIT 20'
       ).execute(
         max_created_at.nil? ? nil : Time.iso8601(max_created_at).localtime
@@ -302,10 +306,11 @@ module Isuconp
 
     get '/posts/:id' do
       results = db.prepare(
-        'SELECT `posts`.`id`, `user_id`, `mime`, `imgdata`, `body`, `posts`.`created_at`, `account_name`, `comment_count` ' \
+        'SELECT `posts`.`id`, `posts`.`user_id`, `posts`.`mime`, `posts`.`imgdata`, `posts`.`body`, `posts`.`created_at`, `users`.`account_name`, `comment_counts`.`comment_count` ' \
         'FROM `posts` ' \
         'JOIN `users` ON `posts`.`user_id` = `users`.`id` ' \
         'LEFT JOIN (SELECT `post_id`, COUNT(*) AS `comment_count` FROM `comments` GROUP BY `post_id`) AS `comment_counts` ' \
+        'ON `posts`.`id` = `comment_counts`.`post_id` ' \
         'WHERE `users`.`del_flg` = 0 AND `posts`.`id` = ?'
       ).execute(
         params[:id]
